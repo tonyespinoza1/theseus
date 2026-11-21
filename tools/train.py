@@ -31,19 +31,12 @@ import subprocess
 from typing import Protocol
 
 from tools import base_move, ci_known_reds as ci, release_check, ci_input_reads
-from aim_next.judgment import DEPLOY_TOOL, CONTROLLER, MIGRATIONS, guarded
+from aim_next.judgment import DEPLOY_TOOL, CONTROLLER, MIGRATIONS, SHA, guarded
 
 KEYS = ("pr", "merge_commit", "items", "merged_tree", "kind", "hosted_run", "judgment")
 ITEM_FIELDS = ("item", "approved_head", "review")
 JUDGMENT_FIELDS = ("producer_runs", "verdict_checks", "audit")
 KINDS = ("ordinary", "judged-first")
-SHA = re.compile(r"[0-9a-f]{40}")
-# What an ordinary train may not change, so that no train judges the code that judges it after the merge: the deploy
-# tool with every tools/ module it loads (the known-reds matcher, GitHub's classifier it reuses and that classifier's
-# input-read audit, the outcome checks), the files GitHub's classifier requires to equal the event base ("validator
-# differs from event base"), the controller (.github/: the workflows and the policy they read) and the service's data
-# migrations, every schema step of which is a row of aim_next/migrations.py's STEPS. tests/test_tools_train.py derives
-# the first two from the code itself, so a module either starts loading is guarded here or that test fails.
 # GitHub's REST API paths for one workflow run, one check run and one pull request, and its compare of a commit with a
 # branch's tip (repos/R/compare/BASE...HEAD).
 RUN_PATH, CHECK_PATH, PULL_PATH = "repos/%s/actions/runs/%d", "repos/%s/check-runs/%d", "repos/%s/pulls/%d"

@@ -37,6 +37,8 @@ function el(tag, attrs, ...kids) {
   return node;
 }
 const time = (ms, now) => el('time', { datetime: new Date(ms).toISOString(), title: datedTime(ms), 'data-ms': String(ms), text: shownTime(ms, now) });
+const judgedNote = piece => piece.freeze?.judged === true
+  ? el('p', { class: 'pl-meta pl-judged', role: 'note', text: 'Judged · this change pays its own gauntlet' }) : null;
 
 // A person or agent as the page names them: "you" in black, an agent in its colour.
 function who(id, reader) {
@@ -211,6 +213,7 @@ export class PipelinePage {
     if (answer.release_piece) {
       const piece = answer.release_piece;
       page.push(section('Next release', null, el('article', { class: 'pl-item', 'aria-label': `Release ${piece.release_number}`, 'data-key': `piece:${piece.id}` },
+        judgedNote(piece),
         el('div', { class: 'pl-head' }, glyph('building'), el('span', { class: 'pl-title', text: `Release ${piece.release_number}, being put together` })),
         el('p', { class: 'pl-meta', text: `${piece.items.length} item${piece.items.length === 1 ? '' : 's'}, combined from their approved pieces:` }),
         el('ul', { class: 'pl-meta pl-release-items' }, ...piece.items.map(number => el('li', {}, el('span', { class: 'pl-num', text: String(number) }), ' ',
@@ -256,8 +259,7 @@ export class PipelinePage {
   }
 
   pieceCard(piece, byNumber, pipeline, now, first) {
-    const card = el('article', { class: 'pl-item', 'data-key': `piece:${piece.id}`, 'aria-label': `Item${piece.items.length > 1 ? 's' : ''} ${listWords(piece.items)}` });
-    if (piece.freeze?.judged === true) card.append(el('p', { class: 'pl-meta pl-judged', role: 'note', text: 'Judged · this change pays its own gauntlet' }));
+    const card = el('article', { class: 'pl-item', 'data-key': `piece:${piece.id}`, 'aria-label': `Item${piece.items.length > 1 ? 's' : ''} ${listWords(piece.items)}` }, judgedNote(piece));
     piece.items.forEach((number, index) => {
       const known = byNumber.get(number);
       const item = known ?? { number, title: piece.titles?.[String(number)] ?? '', glyph: 'building', sources: null, raised_by: null, raised_note: '', size: null, asks: [] };

@@ -168,7 +168,7 @@ class FakeHost:
             assert request["view"]["name"] == "pipeline"
             out = json.dumps({"instance_id": "i-1", "workspace_id": "scratch-pipeline", "relevant_versions": {"pipeline": 1},
                 "pipeline": {"enabled": True, "ships_in_releases": True}, "pieces": [], "items": [],
-                "facts": {"approved_waiting": []}, "next_cursor": None})
+                "facts": {"approved_waiting": [], "next_release": None}, "next_cursor": None})
         elif argv[-1] == "binding":
             if self.on_cli:
                 self.on_cli()

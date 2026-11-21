@@ -28,7 +28,7 @@ class DeployBoundary987(fixture.DeployCase):
                 page={'instance_id':'scratch','workspace_id':'w-scratch','relevant_versions':{'pipeline':1},
                     'pipeline':{'enabled':True,'ships_in_releases':True},'items':[],
                     'pieces':[ordinary] if state['blocked'] else [],
-                    'facts':{'approved_waiting':[42] if state['blocked'] else []},'next_cursor':None}
+                    'facts':{'approved_waiting':[42] if state['blocked'] else [],'next_release':None},'next_cursor':None}
                 return subprocess.CompletedProcess(argv,0,json.dumps(page),'')
             return fake(argv,**kw)
         def policy(*args):
@@ -63,7 +63,7 @@ class MergedTrain987(trains.TrainCase):
                         'piece_revision':2,'by':'scratch-builder','at_ms':1}}
                 page={'instance_id':'i-1','workspace_id':'scratch-pipeline','relevant_versions':{'pipeline':1},
                     'pipeline':{'enabled':True,'ships_in_releases':True},'pieces':[ordinary] if self.waiting else [],
-                    'items':[],'facts':{'approved_waiting':[42] if self.waiting else []},'next_cursor':None}
+                    'items':[],'facts':{'approved_waiting':[42] if self.waiting else [],'next_release':None},'next_cursor':None}
                 return subprocess.CompletedProcess(argv,0,json.dumps(page),'')
             return fake(argv,**kwargs)
         return run

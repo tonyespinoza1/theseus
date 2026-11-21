@@ -259,7 +259,9 @@ class StagesCase(PipelineCase):
     def test_a_release_pipeline_sets_a_piece_aside_but_never_the_release_and_a_record_naming_its_item_ships_it(self):
         self.release_stages(*STAGES[:3], self.CHECKS)
         self.topic("t2")
-        release = self.committed(self.combine([self.committed(self.start(stage="wait"))["piece_id"]], commit_sha="5" * 40))["piece_id"]
+        source = self.committed(self.start(stage="wait"))["piece_id"]
+        self.freeze_source(source)
+        release = self.committed(self.combine([source], commit_sha="5" * 40))["piece_id"]
         refused = self.move(1, section="later", note=self.ASIDE)
         self.rejected(refused, "ITEM_IN_PIECE")
         self.assertEqual(refused["error"]["message"], "1 is in release 23, being put together, so it stays in Now until it ships, goes back to building or is dropped")
@@ -291,6 +293,7 @@ class StagesCase(PipelineCase):
         self.topic("t2")
         first = self.committed(self.start(stage="wait"))["piece_id"]
         second = self.committed(self.start(numbers=(3,), topic="t2", stage="wait"))["piece_id"]
+        self.freeze_source(first); self.freeze_source(second)
         release = self.committed(self.command("pipeline.combine", {"release_number": 23, "piece_ids": [first, second], "topic_id": "t1", "commit_sha": "5" * 40},
                                               {"workspace_id": "w1"}))
         self.assertEqual(release["numbers"], [1, 2, 3])
@@ -317,6 +320,7 @@ class StagesCase(PipelineCase):
         self.topic("t2")
         first = self.committed(self.start(stage="wait"))["piece_id"]
         second = self.committed(self.start(numbers=(3,), topic="t2", stage="wait"))["piece_id"]
+        self.freeze_source(first); self.freeze_source(second)
         self.rejected(self.combine([first], release=24), "RELEASE_NUMBER")
         this = self.committed(self.combine([first], commit_sha="5" * 40))
         self.assertEqual(this["release_number"], 23)
@@ -349,10 +353,18 @@ class StagesCase(PipelineCase):
             args["release_number"] = release
         return self.command("pipeline.combine", dict({"piece_ids": list(pieces), "topic_id": topic}, **args), {"workspace_id": "w1"}, actor=actor)
 
+    def freeze_source(self, piece):
+        # 994: multi-item releases need each real source classification before
+        # the stage/owner/ship behavior under test can be exercised.
+        version = self.sql("SELECT version FROM pipeline_pieces WHERE id=?", (piece,))[0][0]
+        self.committed(self.command("pipeline.freeze", {"base_commit": "a" * 40, "head_commit": "b" * 40,
+            "files": ["web/stage-fixture.mjs"]}, {"piece_id": piece}, {"piece_revision": version}))
+
     def test_combining_leaves_a_stage_on_the_owners_word_only_by_the_owner(self):
         # The blocker probe: agent-b (a member) combined a piece the owner was holding.
         self.release_stages()
         piece = self.committed(self.start())["piece_id"]
+        self.freeze_source(piece)
         ask = self.post("@owner would you read 1 and 2?", actor="agent-a", addressees=["owner"], intent="ask")
         self.committed(self.enter(piece, "tony-reads", actor="agent-a", ask_message_id=ask))
         self.rejected(self.enter(piece, "wait", actor="agent-a", left_outcome="passed"), "STAGE_GATED")
@@ -372,6 +384,7 @@ class StagesCase(PipelineCase):
     def test_combining_into_a_release_stage_on_the_owners_word_needs_an_ask_in_the_release_topic(self):
         self.release_stages(*STAGES[:3], {"stage_id": "approve", "name": "Approve the release", "scope": "release", "gate": {"owner": True}})
         piece = self.committed(self.start(stage="wait"))["piece_id"]
+        self.freeze_source(piece)
         self.rejected(self.combine([piece], actor="agent-b"), "ASK_REQUIRED")
         self.rejected(self.combine([piece]), "ASK_REQUIRED")
         self.assertEqual((self.entries(piece), self.sql("SELECT count(*) FROM pipeline_pieces WHERE kind='release'")), ([("wait", 1, None, 0)], [(0,)]))
@@ -390,6 +403,7 @@ class StagesCase(PipelineCase):
         # Spec 3.4: combine takes the approved pieces, those waiting in the last stage a piece goes through.
         self.release_stages(*STAGES[:3], self.CHECKS)
         building = self.committed(self.start())["piece_id"]
+        self.freeze_source(building)
         refused = self.combine([building])
         self.rejected(refused, "PIECE_NOT_APPROVED")
         self.assertIn("Wait", refused["error"]["message"])

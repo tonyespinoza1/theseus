@@ -55,7 +55,7 @@ else:
     def page(self, pieces=None, approved=None, cursor=None, **more):
         return dict(instance_id='scratch987', workspace_id='work987', relevant_versions={'pipeline':1},
             pipeline={'enabled':True, 'ships_in_releases':True}, pieces=pieces or [], items=[],
-            facts={'approved_waiting':approved or []}, next_cursor=cursor, **more)
+            facts={'approved_waiting':approved or [], 'next_release':None}, next_cursor=cursor, **more)
 
     def piece(self, number, judged=False):
         return {'id':'p-'+str(number), 'items':[number], 'version':4, 'freeze':{'judged':judged,'base_commit':'a'*40,'head_commit':'b'*40,

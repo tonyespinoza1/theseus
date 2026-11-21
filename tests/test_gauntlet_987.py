@@ -161,11 +161,10 @@ class Freeze987(fixture.PipelineCase):
         with self.assertRaises(MigrationError):migrate(self.path,'test-instance',self.binding,'60')
         self.assertTrue(self.shown(piece)['freeze']['judged'])
 
-    def test_987_unclassified_legacy_pieces_keep_existing_combine_behavior(self):
+    def test_987_unclassified_lone_legacy_item_keeps_existing_combine_behavior(self):
         first = self.piece([1])
-        second = self.piece([2], 'other-987')
-        self.wait(first); self.wait(second)
-        self.committed(self.combine([first, second]))
+        self.wait(first)
+        self.committed(self.combine([first]))
 
 
 def load_tests(loader, tests, pattern):

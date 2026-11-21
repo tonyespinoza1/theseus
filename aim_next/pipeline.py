@@ -1220,12 +1220,22 @@ class Pipeline(PieceFreezes):
         piece_ids = args.get("piece_ids")
         if not isinstance(piece_ids, list) or not piece_ids:
             raise Refusal("INVALID_ARGUMENT", "Name the approved pieces to combine")
-        selected = [self._piece(db, actor, key)[0] for key in dict.fromkeys(piece_ids)]
-        for selected_piece in selected:
-            if selected_piece["workspace_id"] != workspace["id"] or selected_piece["kind"] != "piece":
+        selected = []
+        for piece_id in dict.fromkeys(piece_ids):
+            piece, _ = self._piece(db, actor, piece_id)
+            entry = self._open_entry(db, piece["id"])
+            if piece["workspace_id"] != workspace["id"] or piece["kind"] != "piece" or entry is None:
                 raise Refusal("PIECE_CLOSED", "A release combines open item pieces of this outcome")
-        if (sum(len(self._members(db, p["id"])) for p in selected) > 1 and
-                any((self._piece_freeze(db, p["id"]) or {}).get("judged") for p in selected)):
+            if not waiting or entry["stage_id"] != waiting[0]["stage_id"]:
+                raise Refusal("PIECE_NOT_APPROVED", "Piece %s is in %s; a piece is combined once it waits in %s"
+                              % (piece_id, self._stage(db, workspace["id"], entry["stage_id"], current=False)["name"],
+                                 waiting[0]["name"] if waiting else "the last stage a piece goes through"))
+            selected.append((piece, entry, self._members(db, piece["id"]), self._piece_freeze(db, piece["id"])))
+        multiple = sum(len(members) for _, _, members, _ in selected) > 1
+        missing = [piece["id"] for piece, _, _, freeze in selected if freeze is None]
+        if multiple and missing:
+            raise Refusal("FREEZE_REQUIRED", "Freeze every selected piece before combining several items: %s" % ", ".join(missing))
+        if multiple and any(freeze and freeze["judged"] for _, _, _, freeze in selected):
             raise Refusal("JUDGED_BUNDLE", "A judged item pays its own gauntlet; land it alone, without bundling another item")
         ms = _now_ms()
         release_id = "p-" + uuid.uuid4().hex[:24]
@@ -1236,17 +1246,9 @@ class Pipeline(PieceFreezes):
         db.execute("INSERT INTO pipeline_pieces VALUES (?,?,'release',?,NULL,?,1)",
                    (release_id, workspace["id"], topic["id"], args.get("commit_sha")))
         numbers = []
-        for piece_id in dict.fromkeys(piece_ids):
-            piece, _ = self._piece(db, actor, piece_id)
-            entry = self._open_entry(db, piece["id"])
-            if piece["workspace_id"] != workspace["id"] or piece["kind"] != "piece" or entry is None:
-                raise Refusal("PIECE_CLOSED", "Piece %s is not open in this outcome" % piece_id)
-            if not waiting or entry["stage_id"] != waiting[0]["stage_id"]:
-                raise Refusal("PIECE_NOT_APPROVED", "Piece %s is in %s; a piece is combined once it waits in %s"
-                              % (piece_id, self._stage(db, workspace["id"], entry["stage_id"], current=False)["name"],
-                                 waiting[0]["name"] if waiting else "the last stage a piece goes through"))
+        for piece, entry, members, _ in selected:
             self._leave(db, actor, entry, "combined", ms)
-            numbers += self._members(db, piece["id"])
+            numbers += members
         self._enter(db, actor, {"id": release_id, "workspace_id": workspace["id"]}, first, 1, None, ms, args.get("ask_message_id"))
         self._fact(db, workspace["id"], "combine", ms, actor, {"release": release_id, "pieces": list(dict.fromkeys(piece_ids)), "numbers": numbers})
         self._settle(db, workspace["id"])
@@ -1341,7 +1343,8 @@ class Pipeline(PieceFreezes):
         view = {"id": piece["id"], "kind": piece["kind"], "release_number": piece["release_number"],
                 "commit": self._release_commit(db, piece) if piece["kind"] == "release" else None,
                 "size": entries[0]["size"] if entries else None, "items": members,
-                "freeze": self._piece_freeze(db, piece["id"]) if piece["kind"] == "piece" else None,
+                "freeze": (self._piece_freeze(db, piece["id"]) if piece["kind"] == "piece" else
+                           self._release_freeze(db, workspace["id"], piece["id"])),
                 "titles": {str(number): titles.get(number) for number in members},
                 "started": {"by": entries[0]["entered_by"], "ms": entries[0]["entered_ms"]} if entries else None,
                 "stages_so_far": [entry_view(entry) for entry in entries if entry["left_ms"] is not None],
